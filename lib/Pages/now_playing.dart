@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flute_music_player/flute_music_player.dart';
 import 'package:flutter/material.dart';
+import 'package:musix/my_app.dart';
 import 'package:musix/song_data.dart';
 import 'package:musix/theme.dart';
 
@@ -146,7 +147,14 @@ class _NowPlayingState extends State<NowPlaying> {
             Icons.arrow_back_ios,
           ),
           color: const Color(0xFFDDDDDD),
-          onPressed: () {},
+          onPressed: () {
+              Navigator.push(
+          context,
+          new MaterialPageRoute(
+              builder: (context) => new MyApp()
+            )
+              );
+            },
         ),
         title: new Text(''),
         actions: <Widget>[
