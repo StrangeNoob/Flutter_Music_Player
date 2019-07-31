@@ -1,12 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:math';
+
 import 'package:flute_music_player/flute_music_player.dart';
+import 'package:flutter/material.dart';
 import 'package:musix/song_data.dart';
-import 'package:musix/Widgets/mp_album_ui.dart';
-import 'package:musix/Widgets/mp_blur_filter.dart';
-import 'package:musix/Widgets/mp_blur_widget.dart';
-import 'package:musix/Widgets/mp_control_button.dart';
-
-
+import 'package:musix/theme.dart';
 
 enum PlayerState { stopped, playing, paused }
 
@@ -15,9 +12,8 @@ class NowPlaying extends StatefulWidget {
   final SongData songData;
   final bool nowPlayTap;
   NowPlaying(this.songData, this._song, {this.nowPlayTap});
-
   @override
-  _NowPlayingState createState() => new _NowPlayingState();
+  _NowPlayingState createState() => _NowPlayingState();
 }
 
 class _NowPlayingState extends State<NowPlaying> {
@@ -141,99 +137,140 @@ class _NowPlayingState extends State<NowPlaying> {
 
   @override
   Widget build(BuildContext context) {
-    Widget _buildPlayer() => new Container(
-        padding: new EdgeInsets.all(20.0),
-        child: new Column(mainAxisSize: MainAxisSize.min, children: [
-          new Column(
-            children: <Widget>[
-              new Text(
-                song.title,
-                style: Theme.of(context).textTheme.headline,
-              ),
-              new Text(
-                song.artist,
-                style: Theme.of(context).textTheme.caption,
-              ),
-              new Padding(
-                padding: const EdgeInsets.only(bottom: 20.0),
-              )
-            ],
-          ),
-          new Row(mainAxisSize: MainAxisSize.min, children: [
-            new ControlButton(Icons.skip_previous, () => prev(widget.songData)),
-            new ControlButton(isPlaying ? Icons.pause : Icons.play_arrow,
-                isPlaying ? () => pause() : () => play(widget._song)),
-            new ControlButton(Icons.skip_next, () => next(widget.songData)),
-          ]),
-          duration == null
-              ? new Container()
-              : new Slider(
-                  value: position?.inMilliseconds?.toDouble() ?? 0,
-                  onChanged: (double value) =>
-                      audioPlayer.seek((value / 1000).roundToDouble()),
-                  min: 0.0,
-                  max: duration.inMilliseconds.toDouble()),
-          new Row(mainAxisSize: MainAxisSize.min, children: [
-            new Text(
-                position != null
-                    ? "${positionText ?? ''} / ${durationText ?? ''}"
-                    : duration != null ? durationText : '',
-                // ignore: conflicting_dart_import
-                style: new TextStyle(fontSize: 24.0))
-          ]),
-          new Padding(
-            padding: const EdgeInsets.only(bottom: 20.0),
-          ),
-          new Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: <Widget>[
-              new IconButton(
-                  icon: isMuted
-                      ? new Icon(
-                          Icons.headset,
-                          color: Theme.of(context).unselectedWidgetColor,
-                        )
-                      : new Icon(Icons.headset_off,
-                          color: Theme.of(context).unselectedWidgetColor),
-                  color: Theme.of(context).primaryColor,
-                  onPressed: () {
-                    mute(!isMuted);
-                  }),
-              // new IconButton(
-              //     onPressed: () => mute(true),
-              //     icon: new Icon(Icons.headset_off),
-              //     color: Colors.cyan),
-              // new IconButton(
-              //     onPressed: () => mute(false),
-              //     icon: new Icon(Icons.headset),
-              //     color: Colors.cyan),
-            ],
-          ),
-        ]));
-
-    var playerUI = new Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          new AlbumUI(song, duration, position),
-          new Material(
-            child: _buildPlayer(),
-            color: Colors.transparent,
-          ),
-        ]);
-
     return new Scaffold(
       appBar: new AppBar(
-        title: new Text("Now Playing"),
-        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0.0,
+        leading: new IconButton(
+          icon: new Icon(
+            Icons.arrow_back_ios,
+          ),
+          color: const Color(0xFFDDDDDD),
+          onPressed: () {},
+        ),
+        title: new Text(''),
+        actions: <Widget>[
+          new IconButton(
+            icon: new Icon(
+              Icons.menu,
+            ),
+            color: const Color(0xFFDDDDDD),
+            onPressed: () {},
+          ),
+        ],
       ),
       body: new Container(
-        color: Theme.of(context).backgroundColor,
-        child: new Stack(
-          fit: StackFit.expand,
-          children: <Widget>[blurWidget(song), blurFilter(), playerUI],
+        width: double.infinity,
+        child: Column(
+          children: <Widget>[
+            new Expanded(
+              child: new Container(
+                color: Colors.white,
+              ),
+            ),
+            new Material(
+              shadowColor: const Color(0x44000000),
+              color: accentColor,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 40.0, bottom: 50.0),
+                child: Column(children: <Widget>[
+                  new RichText(
+                    text: new TextSpan(
+                      text: '',
+                      children: [
+                        new TextSpan(
+                          text: song.title,
+                          style: new TextStyle(
+                            color: Colors.white,
+                            fontSize: 14.0,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 4.0,
+                            height: 1.5,
+                          ),
+                        ),
+                        new TextSpan(
+                          text: '\n'+song.artist,
+                          style: new TextStyle(
+                            color: Colors.white.withOpacity(0.75),
+                            fontSize: 12.0,
+                            letterSpacing: 3.0,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  new Padding(
+                    padding: const EdgeInsets.only(top: 40.0),
+                    child: new Row(
+                      children: <Widget>[
+                        new Expanded(child: new Container()),
+                        new IconButton(
+                          splashColor: lightAccentColor,
+                          highlightColor: Colors.transparent,
+                          icon: new Icon(
+                            Icons.skip_previous,
+                            color: Colors.white,
+                            size: 35.0,
+                          ),
+                          onPressed: () => prev(widget.songData),
+                        ),
+                        new Expanded(child: new Container()),
+                        new RawMaterialButton(
+                          shape: new CircleBorder(),
+                          fillColor: Colors.white,
+                          splashColor: lightAccentColor,
+                          highlightColor: lightAccentColor.withOpacity(0.5),
+                          elevation: 10.0,
+                          highlightElevation: 5.0,
+                          onPressed: () =>
+                              {isPlaying ? pause() : play(widget._song)},
+                          child: new Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: new Icon(
+                              isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: darkAccentColor,
+                              size: 35.0,
+                            ),
+                          ),
+                        ),
+                        new Expanded(child: new Container()),
+                        new IconButton(
+                          splashColor: lightAccentColor,
+                          highlightColor: Colors.transparent,
+                          icon: new Icon(
+                            Icons.skip_next,
+                            color: Colors.white,
+                            size: 35.0,
+                          ),
+                          onPressed: () => next(widget.songData),
+                        ),
+                        new Expanded(child: new Container()),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+}
+
+class CircleClipper extends CustomClipper<Rect> {
+  @override
+  Rect getClip(Size size) {
+    return new Rect.fromCircle(
+      center: new Offset(size.width / 2, size.height / 2),
+      radius: min(size.width, size.height) / 2,
+    );
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Rect> oldClipper) {
+    return true;
   }
 }
