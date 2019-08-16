@@ -1,11 +1,13 @@
 import 'dart:math';
-
 import 'package:flute_music_player/flute_music_player.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttery/gestures.dart';
+import 'package:fluttery_audio/fluttery_audio.dart';
 import 'package:musix/my_app.dart';
 import 'package:musix/song_data.dart';
 import 'package:musix/theme.dart';
-
+import 'package:flutter/services.dart';
+import 'package:media_notification/media_notification.dart';
 enum PlayerState { stopped, playing, paused }
 
 class NowPlaying extends StatefulWidget {
@@ -23,7 +25,11 @@ class _NowPlayingState extends State<NowPlaying> {
   Duration position;
   PlayerState playerState;
   Song song;
-
+  String status = 'hidden';
+  double _progress;
+  double _seekPercent;
+  bool _isSeeking = false;
+  final Set<AudioPlayerListener> _listeners = Set();
   get isPlaying => playerState == PlayerState.playing;
   get isPaused => playerState == PlayerState.paused;
 
@@ -34,14 +40,71 @@ class _NowPlayingState extends State<NowPlaying> {
 
   bool isMuted = false;
 
+  bool get isSeeking => _isSeeking;
+
+  _setIsSeeking(bool isSeeking) {
+    if (isSeeking == _isSeeking) {
+      return;
+    }
+
+    _isSeeking = isSeeking;
+
+    if (_isSeeking) {
+      for (AudioPlayerListener listener in _listeners) {
+        listener.onSeekStarted();
+      }
+    } else {
+      for (AudioPlayerListener listener in _listeners) {
+        listener.onSeekCompleted();
+      }
+    }
+  }
   @override
   initState() {
     super.initState();
     initPlayer();
+     MediaNotification.setListener('pause', () {
+      setState(() => pause(song));
+    });
+
+    MediaNotification.setListener('play', () {
+      setState(() => play(song));
+    });
+    
+    MediaNotification.setListener('next', () {
+      setState(() => next(widget.songData)); 
+    });
+
+    MediaNotification.setListener('prev', () {
+      prev(widget.songData);
+    });
+
+    MediaNotification.setListener('close', () {
+       hide();dispose();
+    });
+  }
+
+  Future<void> hide() async {
+    try {
+      await MediaNotification.hide();
+      setState(() => status = 'hidden');
+  } on PlatformException {
+
+    }
+  }
+
+  Future<void> show(title, author) async {
+    try {
+      await MediaNotification.show(title: title, author: author);
+      setState(() => status = 'play');
+    } on PlatformException {
+
+    }
   }
 
   @override
   void dispose() {
+    MediaNotification.hide();
     super.dispose();
   }
 
@@ -56,6 +119,7 @@ class _NowPlayingState extends State<NowPlaying> {
     }
     setState(() {
       song = widget._song;
+     // _progress=position.inMilliseconds.toDouble()/duration.inMilliseconds.toDouble();
       if (widget.nowPlayTap == null || widget.nowPlayTap == false) {
         if (playerState != PlayerState.stopped) {
           stop();
@@ -98,13 +162,19 @@ class _NowPlayingState extends State<NowPlaying> {
         setState(() {
           playerState = PlayerState.playing;
           song = s;
+          show(s.title, s.artist);
+          print(song.album);
         });
     }
   }
 
-  Future pause() async {
+  Future pause(Song s) async {
     final result = await audioPlayer.pause();
-    if (result == 1) setState(() => playerState = PlayerState.paused);
+    if (result == 1) setState(() {
+      playerState = PlayerState.paused;
+      song = s;
+      print(s.album);
+      });
   }
 
   Future stop() async {
@@ -119,6 +189,7 @@ class _NowPlayingState extends State<NowPlaying> {
   Future next(SongData s) async {
     stop();
     setState(() {
+      _seekPercent=0.0;
       play(s.nextSong);
     });
   }
@@ -140,21 +211,21 @@ class _NowPlayingState extends State<NowPlaying> {
   Widget build(BuildContext context) {
     return new Scaffold(
       appBar: new AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0.0,
         leading: new IconButton(
           icon: new Icon(
             Icons.arrow_back_ios,
           ),
           color: const Color(0xFFDDDDDD),
-          onPressed: () {
+          onPressed: (){
               Navigator.push(
           context,
           new MaterialPageRoute(
               builder: (context) => new MyApp()
             )
-              );
-            },
+            );
+          },
         ),
         title: new Text(''),
         actions: <Widget>[
@@ -167,15 +238,22 @@ class _NowPlayingState extends State<NowPlaying> {
           ),
         ],
       ),
-      body: new Container(
-        width: double.infinity,
-        child: Column(
+      body: new Column(
           children: <Widget>[
-            new Expanded(
-              child: new Container(
-                color: Colors.white,
+           new Expanded( 
+                child: new RadialSeekBar(
+                  progress: position.inMilliseconds.toDouble()/duration.inMilliseconds.toDouble(),
+                  seekPercent: _isSeeking ? _seekPercent : 0.0,
+                  onSeekRequested: (double seekPercent){
+                    setState(() { _seekPercent = seekPercent; _setIsSeeking(true);});
+                    final seekSeconds= (duration.inMilliseconds * seekPercent)/1000.round();
+                    audioPlayer.seek(seekSeconds);
+                    print(_isSeeking);
+                  },
+                  song: song)
               ),
-            ),
+            new Container(
+            ),  
             new Material(
               shadowColor: const Color(0x44000000),
               color: accentColor,
@@ -233,7 +311,7 @@ class _NowPlayingState extends State<NowPlaying> {
                           elevation: 10.0,
                           highlightElevation: 5.0,
                           onPressed: () =>
-                              {isPlaying ? pause() : play(widget._song)},
+                              {isPlaying ? pause(song) : play(song)},
                           child: new Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: new Icon(
@@ -263,10 +341,254 @@ class _NowPlayingState extends State<NowPlaying> {
             ),
           ],
         ),
+    );
+  }
+}
+
+class RadialSeekBar extends StatefulWidget {
+ 
+ final Song song;
+ final double seekPercent;
+ final double progress;
+ final Function(double) onSeekRequested;
+
+ RadialSeekBar({
+    
+    @required this.song,
+    this.seekPercent = 0.0,
+    this.progress, 
+    this.onSeekRequested,  
+  });
+
+  
+
+  @override
+  _RadialSeekBarState createState() => _RadialSeekBarState();
+}
+
+class _RadialSeekBarState extends State<RadialSeekBar> {
+  PolarCoord _startDragCord;
+  double _startDragPercent;
+  double _progress;
+  double _currentDragPercent;
+   void _onDragStart(PolarCoord coord){
+      _startDragCord = coord;
+      _startDragPercent = _progress;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _progress = widget.progress;
+  }
+
+  @override
+  void didUpdateWidget(RadialSeekBar oldWidget) {
+    
+    super.didUpdateWidget(oldWidget);
+    _progress = widget.progress;
+  }
+  void _onDragUpdate(PolarCoord coord){
+    final dragAngle = coord.angle - _startDragCord.angle;
+    final dragPercent = dragAngle/ (2 * pi);
+
+    setState(() => _currentDragPercent = (_startDragPercent + dragPercent) % 1.0 );
+
+  }
+
+  void _onDragEnd(){
+
+    if (widget.onSeekRequested != null){
+      widget.onSeekRequested(_currentDragPercent);
+    }    
+    setState(() {
+     _currentDragPercent = null;
+     _startDragCord = null;
+     _startDragPercent = 0.0;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double thumbposition = _progress;
+    if(_currentDragPercent != null){
+      thumbposition =_currentDragPercent;  
+    }
+    else if( widget.seekPercent ==  null){
+      thumbposition = widget.seekPercent;
+    }
+    else{
+      thumbposition=_progress;
+    }
+    return new RadialDragGestureDetector(
+      onRadialDragStart: _onDragStart,
+      onRadialDragUpdate: _onDragUpdate,
+      onRadialDragEnd: _onDragEnd,
+      child: Container(
+        color: Colors.white,
+        width: double.infinity,
+        height: double.infinity,
+        child: new Center(
+        child: Container(
+          width: 140.0,
+          height: 140.0,
+          child: new RadialProgressBar(
+            trackColor: new Color(0xFFDDDDDD),
+            progressPercent: _progress,
+            thumbPosition: thumbposition,
+            progressColor: accentColor,
+            thumbColor: lightAccentColor ,
+            innerPadding: const EdgeInsets.all(10.0),
+            child: new ClipOval(
+                clipper: new CircleClipper(),
+                child: new Image.asset(
+                  widget.song.albumArt !=null ? widget.song.albumArt : 'assets/images/music_symbol.png' ,
+                  fit: BoxFit.cover,)
+            ),
+          ),
+        ),
+      )
+                ),
+    );
+  }
+}
+
+class RadialProgressBar extends StatefulWidget {
+
+  final double trackWidth;
+  final Color trackColor;
+  final double progressWidth;
+  final double progressPercent;
+  final Color progressColor;
+  final double thumbSize;
+  final Color thumbColor;
+  final double thumbPosition;
+  final Widget child;
+  final EdgeInsets innerPadding;
+  final EdgeInsets outerPadding;
+
+  RadialProgressBar({
+    this.trackWidth = 3.0,
+    this.trackColor= Colors.grey,
+    this.progressWidth= 5.0,
+    this.progressColor=Colors.black,
+    this.thumbColor=Colors.black,
+    this.thumbSize= 10.0,
+    this.progressPercent=0.0,
+    this.thumbPosition=0.0,
+    this.child,
+    this.innerPadding=const EdgeInsets.all(0.0),
+    this.outerPadding=const EdgeInsets.all(0.0),
+});
+  @override
+  _RadialProgressBarState createState() => _RadialProgressBarState();
+}
+
+class _RadialProgressBarState extends State<RadialProgressBar> {
+ 
+ EdgeInsets _insetsForPainter(){
+     final outerThickness = max(widget.trackWidth,max(widget.progressWidth,widget.thumbSize))/2;
+     return new EdgeInsets.all(outerThickness);
+
+ }
+ 
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: widget.outerPadding,
+      child: new CustomPaint(
+
+        foregroundPainter: new RadialSeekBarPainter(
+          trackWidth: widget.trackWidth,
+          trackColor: widget.trackColor,
+          progressWidth: widget.progressWidth,
+          progressColor: widget.progressColor,
+          progressPercent: widget.progressPercent,
+          thumbColor: widget.thumbColor,
+          thumbSize: widget.thumbSize,
+          thumbPositon: widget.thumbPosition
+        ),
+        child: new Padding(
+           padding: _insetsForPainter()+widget.innerPadding,
+           child: widget.child,
+         ),
       ),
     );
   }
 }
+
+class RadialSeekBarPainter extends CustomPainter{
+
+  final double trackWidth;
+  final Paint trackPaint;
+  final double progressWidth;
+  final double progressPercent;
+  final Paint progressPaint;
+  final double thumbSize;
+  final Paint thumbPaint;
+  final double thumbPositon;
+
+  RadialSeekBarPainter({
+    @required this.trackWidth,
+    @required trackColor= Colors.grey,
+    @required this.progressWidth,
+    @required progressColor=Colors.black,
+    @required thumbColor=Colors.black,
+    @required this.thumbSize,
+    @required this.progressPercent,
+    @required this.thumbPositon,
+  }) : trackPaint = new Paint()
+        ..color =  trackColor
+        ..style =  PaintingStyle.stroke
+        ..strokeWidth =  trackWidth,
+       progressPaint = new Paint()
+        ..color = progressColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = progressWidth
+        ..strokeCap = StrokeCap.round,
+       thumbPaint =  new Paint()
+        ..color =  thumbColor
+        ..style = PaintingStyle.fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+
+    final outerThickness = max(trackWidth,max(progressWidth,thumbSize)); 
+    Size constraintedSize = new Size(size.width-outerThickness, size.height-outerThickness);
+
+    final centre = new Offset(size.width/2, size.height/2);
+    final radius =  min(constraintedSize.width,constraintedSize.height)/2;
+    canvas.drawCircle(centre, radius, trackPaint);
+
+    final progressAngle =  2 * pi * progressPercent;
+    canvas.drawArc( new Rect.fromCircle(
+          center: centre,
+          radius: radius,
+        ),
+        -pi/2,
+        progressAngle,
+        false,
+        progressPaint);
+    final thumbAngle = 2 * pi * thumbPositon - (pi / 2);
+    final thumbX = cos(thumbAngle) * radius;
+    final thumbY = sin(thumbAngle) * radius;
+    final thumbCenter = new Offset(thumbX, thumbY) + centre;
+    final thumbRadius = thumbSize / 2.0;
+    canvas.drawCircle(
+      thumbCenter,
+      thumbRadius,
+      thumbPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+
+    return true;
+  }
+
+}
+
 
 class CircleClipper extends CustomClipper<Rect> {
   @override

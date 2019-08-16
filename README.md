@@ -1,4 +1,4 @@
-# musix
+# musix_player
 
 A new Flutter project.
 
