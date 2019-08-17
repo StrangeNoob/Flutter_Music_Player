@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flute_music_player/flute_music_player.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_visualizers/Visualizers/MultiWaveVisualizer.dart';
 import 'package:fluttery/gestures.dart';
 import 'package:fluttery_audio/fluttery_audio.dart';
 import 'package:musix/my_app.dart';
@@ -8,6 +9,7 @@ import 'package:musix/song_data.dart';
 import 'package:musix/theme.dart';
 import 'package:flutter/services.dart';
 import 'package:media_notification/media_notification.dart';
+
 enum PlayerState { stopped, playing, paused }
 
 class NowPlaying extends StatefulWidget {
@@ -119,7 +121,7 @@ class _NowPlayingState extends State<NowPlaying> {
     }
     setState(() {
       song = widget._song;
-     // _progress=position.inMilliseconds.toDouble()/duration.inMilliseconds.toDouble();
+           // _progress=position.inMilliseconds.toDouble()/duration.inMilliseconds.toDouble();
       if (widget.nowPlayTap == null || widget.nowPlayTap == false) {
         if (playerState != PlayerState.stopped) {
           stop();
@@ -253,7 +255,21 @@ class _NowPlayingState extends State<NowPlaying> {
                   song: song)
               ),
             new Container(
-            ),  
+              width: double.infinity,
+              height: 125.0,
+              child: new Visualizer(
+                   builder: (BuildContext context, List<int> fft) {
+                      return new CustomPaint(
+                          painter: new VisualizerPainter(
+                          fft: fft,
+                          height: 125.0,
+                          color: accentColor,
+                        ),
+                          child: new Container(),
+                      );
+                      },
+                ),
+              ),
             new Material(
               shadowColor: const Color(0x44000000),
               color: accentColor,
@@ -310,8 +326,7 @@ class _NowPlayingState extends State<NowPlaying> {
                           highlightColor: lightAccentColor.withOpacity(0.5),
                           elevation: 10.0,
                           highlightElevation: 5.0,
-                          onPressed: () =>
-                              {isPlaying ? pause(song) : play(song)},
+                          onPressed: () => {isPlaying ? pause(song) : play(song)},
                           child: new Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: new Icon(
@@ -343,6 +358,118 @@ class _NowPlayingState extends State<NowPlaying> {
         ),
     );
   }
+}
+
+class VisualizerPainter extends CustomPainter {
+
+  final List<int> fft;
+  final double height;
+  final Color color;
+  final Paint wavePaint;
+
+  VisualizerPainter({
+    this.fft,
+    this.height,
+    this.color,
+  }) : wavePaint = new Paint()
+    ..color = color.withOpacity(0.75)
+    ..style = PaintingStyle.fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _renderWaves(canvas, size);
+  }
+
+  void _renderWaves(Canvas canvas, Size size) {
+    // Starting from the 10th sample since the lower bins are barely audible
+    final histogramLow = _createHistogram(fft, 16, 12, ((fft.length - 2) / 4).floor() + 10);
+    final histogramHigh = _createHistogram(fft, 16, ((fft.length - 2) / 4).ceil() + 10, ((fft.length - 2) / 2).floor());
+
+    _renderHistogram(canvas, size, histogramLow);
+    _renderHistogram(canvas, size, histogramHigh);
+  }
+
+  void _renderHistogram(Canvas canvas, Size size, List<int> histogram) {
+    if (histogram.length == 0) {
+      return;
+    }
+
+    final pointsToGraph = histogram.length;
+    final widthPerSample = (size.width / (pointsToGraph - 2)).floor();
+
+    final points = new List<double>.filled(pointsToGraph * 4, 0.0);
+
+    for (int i = 0; i < histogram.length - 1; ++i) {
+      points[i * 4] = (i * widthPerSample).toDouble();
+      points[i * 4 + 1] = size.height - histogram[i].toDouble();
+
+      points[i * 4 + 2] = ((i + 1) * widthPerSample).toDouble();
+      points[i * 4 + 3] = size.height - (histogram[i + 1].toDouble());
+    }
+
+    Path path = new Path();
+    path.moveTo(0.0, size.height);
+    path.lineTo(points[0], points[1]);
+    for (int i = 2; i < points.length - 4; i += 2) {
+      path.cubicTo(
+          points[i - 2] + 10.0, points[i - 1],
+          points[i] - 10.0, points [i + 1],
+          points[i], points[i + 1]
+      );
+    }
+    path.lineTo(size.width, size.height);
+    path.close();
+
+    canvas.drawPath(path, wavePaint);
+  }
+
+  List<int> _createHistogram(List<int> samples, int bucketCount, [int start, int end]) {
+    if (start == end) {
+      return const [];
+    }
+
+    // Make sure we're not starting in the middle of an imaginary pair!
+    assert(start > 1 && start % 2 == 0);
+
+    start = start ?? 0;
+    end = end ?? samples.length - 1;
+    final sampleCount = end - start + 1;
+
+    final samplesPerBucket = (sampleCount / bucketCount).floor();
+    if (samplesPerBucket == 0) {
+      return const [];
+    }
+
+    final actualSampleCount = sampleCount - (sampleCount % samplesPerBucket);
+    List<double> histogram = new List<double>.filled(bucketCount + 1, 0.0);
+
+    for (int i = start; i <= start + actualSampleCount; ++i) {
+      if ((i - start) % 2 == 1) {
+        continue;
+      }
+
+      // Calculate the magnitude of the FFT result for the bin while removing
+      // the phase correlation information by calculating the raw magnitude
+      double magnitude = sqrt((pow(samples[i], 2) + pow(samples[i + 1], 2)));
+      // Convert the raw magnitude to Decibels Full Scale (dBFS) assuming an 8 bit value
+      // and clamp it to get rid of astronomically small numbers and -Infinity when array is empty.
+      // We are assuming the values are already normalized
+      double magnitudeDb = (10 * (log(magnitude / 256) / ln10));
+      int bucketIndex = ((i - start) / samplesPerBucket).floor();
+      histogram[bucketIndex] += (magnitudeDb == -double.infinity) ? 0 : magnitudeDb;
+    }
+
+    // Average the bins, round the results and return an inverted dB scale
+    return histogram.map((double d) {
+      return (-10 * d / samplesPerBucket).round();
+    }).toList();
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+    return true;
+  }
+
 }
 
 class RadialSeekBar extends StatefulWidget {
