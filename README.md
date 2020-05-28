@@ -1,16 +1,24 @@
-# musix_player
+This is a Music Player app developed in flutter.
 
-A new Flutter project.
+![screenshot](img/1.jpg) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ![screenshot](img/2.jpg) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ![screenshot](img/6.jpg)
+<br/>
+<br/>
+<br/>
+<br/>
+![screenshot](img/3.jpg) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ![screenshot](img/4.jpg) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ![screenshot](img/5.jpg)
 
-## Getting Started
+Key Features :
 
-This project is a starting point for a Flutter application.
+* Play, pause, seek options.
 
-A few resources to get you started if this is your first Flutter project:
+* Search across playlist, albums and songs.
 
-- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
+* Various theme options.
 
-For help getting started with Flutter, view our 
-[online documentation](https://flutter.dev/docs), which offers tutorials, 
-samples, guidance on mobile development, and a full API reference.
+* Create and delete playlist.
+
+* Controls in Notification bar.
+
+* Support for five languages( Spanish, German, French, Russian and English).
+
+* Beautiful and responsive UI.
